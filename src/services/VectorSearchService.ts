@@ -83,6 +83,7 @@ class VectorSearchService {
             // output is an array of Tensors. The feature vector is usually the first element.
             // MobileNetV2 feature vector is typically 1280 floats.
             if (output && output.length > 0) {
+                console.log('Embedding generated successfully. Vector length:', output[0].length);
                 return output[0] as Float32Array;
             }
             return null;
@@ -147,10 +148,13 @@ class VectorSearchService {
                 }
             }
 
-            return matches
+            const sortedMatches = matches
                 .filter(m => !isNaN(m.similarity))
                 .sort((a, b) => b.similarity - a.similarity)
                 .slice(0, limit);
+
+            console.log('Vector Search - Top Matches:', JSON.stringify(sortedMatches, null, 2));
+            return sortedMatches;
         } catch (e) {
             console.error('Similarity search failed:', e);
             return [];

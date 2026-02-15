@@ -3,11 +3,9 @@ import { View, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-nativ
 import { TextInput, Button, Appbar, useTheme, Surface, Text, List, Card, Portal } from 'react-native-paper';
 import { useCollection, Car } from '../context/CollectionContext';
 import { useNavigation } from '@react-navigation/native';
-import { launchCamera } from 'react-native-image-picker';
+import ImagePicker, { Image as CroppedImage } from 'react-native-image-crop-picker';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { parseOCRText } from '../utils/ocrParser';
-import { detectAndCrop } from '../utils/CropUtils';
-import { Snackbar } from 'react-native-paper';
 import ImagePreviewModal from '../components/ImagePreviewModal';
 import Fuse from 'fuse.js';
 
@@ -22,7 +20,6 @@ const SearchScreen = () => {
     const [visualResults, setVisualResults] = useState<Car[]>([]);
     const [scanResult, setScanResult] = useState<{ found: boolean; car?: Car } | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [cropMessageVisible, setCropMessageVisible] = useState(false);
 
     const fuse = useMemo(() => {
         return new Fuse(cars, {
@@ -38,28 +35,22 @@ const SearchScreen = () => {
     }, [fuse, searchQuery]);
 
     const handleVisualSearch = async () => {
-        const options = {
-            mediaType: 'photo' as const,
-            quality: 0.8 as const,
-            maxWidth: 224,
-            maxHeight: 224
-        };
-        const result = await launchCamera(options);
+        try {
+            const image = await ImagePicker.openCamera({
+                mediaType: 'photo',
+                cropping: true,
+                width: 224,
+                height: 224,
+                freeStyleCropEnabled: true,
+                forceJpg: true,
+            });
 
-        if (result.assets && result.assets.length > 0) {
-            const uri = result.assets[0].uri;
-            if (uri) {
+            if (image) {
+                const uri = (image as CroppedImage).path;
                 setIsSearchingVisual(true);
                 setSearchQuery(''); // Clear text search
                 try {
-                    let finalUri = uri;
-                    const cropResult = await detectAndCrop(uri);
-                    if (cropResult) {
-                        finalUri = cropResult.uri;
-                        setCropMessageVisible(true);
-                    }
-
-                    const similar = await findSimilarCars(finalUri);
+                    const similar = await findSimilarCars(uri);
                     setVisualResults(similar);
                     if (similar.length === 0) {
                         setScanResult({ found: false });
@@ -70,26 +61,27 @@ const SearchScreen = () => {
                     setIsSearchingVisual(false);
                 }
             }
+        } catch (error: any) {
+            if (error.code !== 'E_PICKER_CANCELLED') {
+                console.error('Visual Search Error: ', error);
+            }
         }
     };
 
     const handleScanSearch = async () => {
-        const options = { mediaType: 'photo' as const, quality: 1 as const };
-        const result = await launchCamera(options);
+        try {
+            const image = await ImagePicker.openCamera({
+                mediaType: 'photo',
+                cropping: true,
+                freeStyleCropEnabled: true,
+                forceJpg: true,
+            });
 
-        if (result.assets && result.assets.length > 0) {
-            const uri = result.assets[0].uri;
-            if (uri) {
+            if (image) {
+                const uri = (image as CroppedImage).path;
                 setIsScanning(true);
                 try {
-                    let finalUri = uri;
-                    const cropResult = await detectAndCrop(uri);
-                    if (cropResult) {
-                        finalUri = cropResult.uri;
-                        setCropMessageVisible(true);
-                    }
-
-                    const visionResult = await TextRecognition.recognize(finalUri);
+                    const visionResult = await TextRecognition.recognize(uri);
                     const info = parseOCRText(visionResult.text);
                     const searchKey = `${info.brand} ${info.model} ${info.modelId}`;
                     const results = fuse.search(searchKey);
@@ -104,6 +96,10 @@ const SearchScreen = () => {
                 } finally {
                     setIsScanning(false);
                 }
+            }
+        } catch (error: any) {
+            if (error.code !== 'E_PICKER_CANCELLED') {
+                console.error('Scan Search Error: ', error);
             }
         }
     };
@@ -232,15 +228,6 @@ const SearchScreen = () => {
                 }
             />
 
-            <Portal>
-                <Snackbar
-                    visible={cropMessageVisible}
-                    onDismiss={() => setCropMessageVisible(false)}
-                    duration={2000}
-                >
-                    Auto-cropped to focus on car/box 📸
-                </Snackbar>
-            </Portal>
 
             <ImagePreviewModal
                 visible={!!previewUrl}

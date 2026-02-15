@@ -1,6 +1,6 @@
 # MyDiecast
 
-MyDiecast is a premium, lightweight React Native application designed for diecast car enthusiasts. It helps you manage your collection with ease, featuring intelligent entry, powerful search, and robust data portability.
+MyDiecast is a lightweight React Native application designed for diecast car enthusiasts. It helps you manage your collection with ease, featuring intelligent entry, powerful search, and robust data portability.
 
 ---
 
@@ -9,7 +9,6 @@ MyDiecast goes beyond simple text search with AI-powered discovery:
 - **Fuzzy Search**: Find cars by partial brand or model names.
 - **Scan Box Art**: Uses on-device OCR to extract info from original packaging, with a new **editable verification dialog** for manual corrections.
 - **Visual Match (AI)**: Take a photo of any car to find it in your collection. Uses a private, on-device TensorFlow Lite model.
-- **Auto-Crop (Object Detection)**: Automatically focuses and crops photos to the best car or box view, improving both visual consistency and AI accuracy.
 
 ---
 

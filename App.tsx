@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -41,11 +42,13 @@ const MainApp = () => {
 function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
-      <SettingsProvider>
-        <CollectionProvider>
-          <MainApp />
-        </CollectionProvider>
-      </SettingsProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SettingsProvider>
+          <CollectionProvider>
+            <MainApp />
+          </CollectionProvider>
+        </SettingsProvider>
+      </GestureHandlerRootView>
     </SafeAreaProvider>
   );
 }

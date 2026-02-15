@@ -8,6 +8,7 @@ export interface Car {
     model: string;
     scale: string;
     year?: string;
+    modelId?: string;
     condition: string;
     imageUrl?: string;
     notes?: string;

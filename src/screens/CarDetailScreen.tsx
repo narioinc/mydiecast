@@ -48,6 +48,16 @@ const CarDetailScreen = () => {
                         left={(props) => <List.Icon {...props} icon="tag" />}
                     />
                     <Divider />
+                    {car.modelId ? (
+                        <>
+                            <List.Item
+                                title="Model ID"
+                                description={car.modelId}
+                                left={(props) => <List.Icon {...props} icon="identifier" />}
+                            />
+                            <Divider />
+                        </>
+                    ) : null}
                     <List.Item
                         title="Scale"
                         description={car.scale}
