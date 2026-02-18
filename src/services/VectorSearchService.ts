@@ -19,15 +19,32 @@ class VectorSearchService {
     async init() {
         if (!this.db) {
             try {
-                this.db = open({ name: DB_NAME });
-                this.db.execute(`
+                console.log('VectorSearchService: Opening database:', DB_NAME);
+                this.db = await open({ name: DB_NAME });
+                
+                // Check if table exists
+                console.log('VectorSearchService: Checking table structure...');
+                const tableCheck = await this.db.execute(`
+                    SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'
+                `);
+                console.log('VectorSearchService: Table check results:', tableCheck.rows[0]);
+                
+                await this.db.execute(`
                     CREATE TABLE IF NOT EXISTS embeddings (
                         carId TEXT PRIMARY KEY,
                         vector BLOB NOT NULL
                     )
                 `);
+                console.log("done creating table");
+
+                var { rows } = await this.db.execute(
+                    'SELECT count(*) as count FROM embeddings');
+                console.log(rows);
+               
+                
+                console.log('VectorSearchService: Database initialized successfully');
             } catch (e) {
-                console.error('DB Init failed:', e);
+                console.error('VectorSearchService: DB Init failed:', e);
             }
         }
 
@@ -38,7 +55,7 @@ class VectorSearchService {
                 this.model = await loadTensorflowModel(require('../../assets/mobilenet_v2.tflite'));
                 console.log('TFLite Model loaded successfully');
             } catch (error) {
-                console.error('Failed to load TFLite model', error);
+                console.error('VectorSearchService: Failed to load TFLite model', error);
             }
         }
     }
@@ -99,52 +116,91 @@ class VectorSearchService {
 
         try {
             const dataToStore = new Uint8Array(vector.buffer);
-            this.db.execute(
+            console.log(`VectorSearchService: Storing embedding for ${carId}, vector size: ${vector.length} floats (${dataToStore.length} bytes)`);
+            await this.db.execute(
                 'INSERT OR REPLACE INTO embeddings (carId, vector) VALUES (?, ?)',
                 [carId, dataToStore]
             );
+            console.log(`VectorSearchService: Successfully stored embedding for ${carId}`);
+            
+            // Verify the store worked by querying
+            const { verifyResults } = await this.db.execute('SELECT * FROM embeddings WHERE carId = ?', [carId]);
+            if (verifyResults){
+                console.log(`VectorSearchService: Verification - found row:`, verifyResults);
+            }
+            
+            // Log database stats
+            this.logDatabaseStats();
         } catch (e) {
             console.error('Failed to store embedding:', e);
         }
     }
 
-    async findSimilar(queryVector: Float32Array, limit: number = 5): Promise<VectorMatch[]> {
-        if (!this.db) await this.init();
-        if (!this.db || !queryVector) return [];
-
+    private logDatabaseStats() {
+        if (!this.db) return;
         try {
-            const results = this.db.execute('SELECT carId, vector FROM embeddings');
+            const results = this.db.execute('SELECT COUNT(*) as count, SUM(length(vector)) as totalBytes FROM embeddings');
+            if (results && results.rows && results.rows.length > 0) {
+                const row = results.rows.item(0);
+                console.log(`VectorSearchService: DB Stats - ${row.count} embeddings, ${row.totalBytes} total bytes`);
+            }
+        } catch (e) {
+            console.error('VectorSearchService: Failed to get DB stats', e);
+        }
+    }
 
-            if (!results || !results.rows) {
-                console.warn('VectorSearchService: No results or rows returned from embeddings query');
+    async findSimilar(queryVector: Float32Array, limit: number = 5): Promise<VectorMatch[]> {
+        try {
+            if (!this.db) await this.init();
+            if (!this.db || !queryVector) return [];
+
+            // Log database stats before querying
+            this.logDatabaseStats();
+
+            console.log('VectorSearchService: Executing SQL query...');
+            const {rows} = await this.db.execute(
+               'SELECT carId, vector FROM embeddings');
+
+            if (!rows) {
+                console.warn('VectorSearchService: No results object returned from query');
+                return [];
+            }else{
+                //console.log(rows)
+            }
+            //console.log(results.item(0))
+
+    
+
+            if (rows.keys().length === 0) {
+                console.warn('VectorSearchService: No rows found in embeddings query results');
                 return [];
             }
 
             const matches: VectorMatch[] = [];
-            const rowCount = results.rows.length || 0;
 
-            for (let i = 0; i < rowCount; i++) {
-                const row = results.rows.item ? results.rows.item(i) : (results.rows._array ? results.rows._array[i] : null);
+            for (var row of rows) {
 
                 if (!row || !row.vector) {
+                    console.warn(`VectorSearchService: Row missing vector data`, row);
                     continue;
                 }
 
                 try {
-                    // row.vector is potentially a Uint8Array. 
+                    // row.vector is a Uint8Array from SQLite BLOB
                     // Float32Array constructor needs (buffer, byteOffset, length)
-                    // MobileNetV2 usually returns 1001 or 1280 floats -> 4004 or 5120 bytes.
+                    // MobileNetV2 usually returns 1280 floats -> 5120 bytes
                     const vectorData = row.vector;
                     const storedVector = new Float32Array(
                         vectorData.buffer,
-                        vectorData.byteOffset,
+                        vectorData.byteOffset || 0,
                         vectorData.byteLength / 4
                     );
-
+                    console.log(queryVector)
+                    console.log(storedVector);
                     const similarity = this.cosineSimilarity(queryVector, storedVector);
                     matches.push({ carId: row.carId, similarity });
                 } catch (rowError) {
-                    console.error(`Error processing row at index ${i}:`, rowError);
+                    console.error(`Error processing row at index`, rowError);
                 }
             }
 
@@ -155,6 +211,7 @@ class VectorSearchService {
 
             console.log('Vector Search - Top Matches:', JSON.stringify(sortedMatches, null, 2));
             return sortedMatches;
+            //return [];
         } catch (e) {
             console.error('Similarity search failed:', e);
             return [];
